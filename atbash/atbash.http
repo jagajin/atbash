@@ -1,0 +1,6 @@
+@atbash_HostAddress = http://localhost:5075
+
+GET {{atbash_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

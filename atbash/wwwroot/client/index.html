@@ -1,0 +1,308 @@
+﻿<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atbash Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: white;
+            color: black;
+        }
+
+        textarea, input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin: 4px 0;
+            box-sizing: border-box;
+            border: 1px solid black;
+            font-size: 14px;
+        }
+
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        .btn {
+            padding: 8px 12px;
+            margin: 4px 4px 4px 0;
+            background-color: white;
+            color: black;
+            border: 1px solid black;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #result, #logs, #authResult, #history {
+            background: white;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid black;
+            white-space: pre-wrap;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .auth-section, .main-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid black;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .toggle-password-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        h1, h2, h3 {
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Atbash — клиент</h1>
+
+    <!-- авторизация -->
+    <div id="authSection" class="auth-section">
+        <h2>Авторизация</h2>
+        <div>
+            <input type="text" id="username" placeholder="Имя пользователя" />
+            <div class="password-wrapper">
+                <input type="password" id="password" placeholder="Пароль" />
+                <button type="button" class="toggle-password-btn" id="togglePassword">👁️</button>
+            </div>
+            <br />
+            <button class="btn" id="loginBtn">Войти</button>
+            <button class="btn" id="registerBtn">Зарегистрироваться</button>
+            <button class="btn" id="logoutBtn" style="display:none;">Выйти</button>
+        </div>
+        <div id="authResult"></div>
+    </div>
+
+    <!-- сновной интерфейс -->
+    <div id="mainSection" class="main-section hidden">
+        <textarea id="inputText" placeholder="Введите текст для шифрования или дешифрования..."></textarea><br />
+        <input type="file" id="fileInput" accept=".txt" style="display: none;" />
+        <button class="btn" id="loadFileBtn">Загрузить из .txt</button>
+        <button class="btn" id="saveFileBtn">Сохранить в .txt</button>
+        <button class="btn" id="encryptBtn">Шифровать</button>
+        <button class="btn" id="decryptBtn">Дешифровать</button>
+        <button class="btn" id="viewLogsBtn">Показать логи</button>ё
+
+        <h3>Результат</h3>
+        <div id="result"></div>
+
+        <h2>Логи</h2>
+        <div id="logs"></div>
+
+        <h2 id="historyTitle" style="display:none;">История операций</h2>
+        <div id="history" style="display:none;"></div>
+    </div>
+
+    <script>
+        const apiBase = '/api';
+        let authToken = localStorage.getItem('authToken');
+
+        function updateAuthUI() {
+            const authSection = document.getElementById('authSection');
+            const mainSection = document.getElementById('mainSection');
+            const logoutBtn = document.getElementById('logoutBtn');
+
+            if (authToken) {
+                authSection.style.display = 'none';
+                mainSection.classList.remove('hidden');
+                logoutBtn.style.display = 'inline-block';
+            } else {
+                authSection.style.display = 'block';
+                mainSection.classList.add('hidden');
+                logoutBtn.style.display = 'none';
+                localStorage.removeItem('authToken');
+                // Очистка данных при выходе
+                document.getElementById('result').innerText = '';
+                document.getElementById('logs').innerText = '';
+                document.getElementById('history').innerText = '';
+                document.getElementById('historyTitle').style.display = 'none';
+            }
+        }
+
+        async function apiRequest(url, options = {}) {
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            };
+
+            if (authToken) {
+                config.headers.Authorization = `Bearer ${authToken}`;
+            }
+
+            const res = await fetch(url, config);
+
+            if (res.status === 401) {
+                authToken = null;
+                updateAuthUI();
+                alert('Сессия истекла. Пожалуйста, войдите снова.');
+            }
+
+            return res.json();
+        }
+        
+        // Авторизация
+        document.getElementById('loginBtn').onclick = async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            try {
+                const data = await apiRequest(apiBase + '/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+                if (data.token) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    updateAuthUI();
+                    document.getElementById('authResult').innerText = 'Успешный вход!';
+                } else {
+                    document.getElementById('authResult').innerText = 'Ошибка: ' + (data.message || 'Неверные данные');
+                }
+            } catch (err) {
+                document.getElementById('authResult').innerText = 'Ошибка подключения к серверу.';
+                console.error(err);
+            }
+        };
+
+        document.getElementById('registerBtn').onclick = async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            try {
+                const data = await apiRequest(apiBase + '/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+                document.getElementById('authResult').innerText = 'Регистрация успешна! Можете войти.';
+            } catch (err) {
+                document.getElementById('authResult').innerText = 'Ошибка регистрации';
+                console.error(err);
+            }
+        };
+
+        document.getElementById('logoutBtn').onclick = () => {
+            authToken = null;
+            updateAuthUI();
+        };
+
+        // Показать/скрыть пароль
+        document.getElementById('togglePassword').onclick = function () {
+            const pwd = document.getElementById('password');
+            const type = pwd.type === 'password' ? 'text' : 'password';
+            pwd.type = type;
+            this.textContent = type === 'password' ? '🙉' : '🙈';
+        };
+
+        // Работа с файлами
+        document.getElementById('loadFileBtn').onclick = () => {
+            document.getElementById('fileInput').click();
+        };
+
+        document.getElementById('fileInput').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.name.endsWith('.txt')) {
+                alert('Поддерживаются только файлы с расширением .txt');
+                return;
+            }
+            const text = await file.text();
+            document.getElementById('inputText').value = text;
+        };
+
+        document.getElementById('saveFileBtn').onclick = () => {
+            const content = document.getElementById('result').innerText.trim();
+            if (!content) {
+                alert('Нет данных для сохранения');
+                return;
+            }
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'atbash_result.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // Шифрование / Дешифрование
+        document.getElementById('encryptBtn').onclick = async () => {
+            const text = document.getElementById('inputText').value;
+            if (!text.trim()) {
+                document.getElementById('result').innerText = 'Введите текст для шифрования.';
+                return;
+            }
+            try {
+                const data = await apiRequest(apiBase + '/cipher/encrypt', {
+                    method: 'POST',
+                    body: JSON.stringify({ text, source: "Manual" })
+                });
+                document.getElementById('result').innerText = data.Result || JSON.stringify(data, null, 2);
+            } catch (err) {
+                document.getElementById('result').innerText = 'Ошибка: ' + (err.message || 'Неизвестная ошибка');
+                console.error(err);
+            }
+        };
+
+        document.getElementById('decryptBtn').onclick = async () => {
+            const text = document.getElementById('inputText').value;
+            if (!text.trim()) {
+                document.getElementById('result').innerText = 'Введите текст для дешифрования.';
+                return;
+            }
+            try {
+                const data = await apiRequest(apiBase + '/cipher/decrypt', {
+                    method: 'POST',
+                    body: JSON.stringify({ text, source: "Manual" })
+                });
+                document.getElementById('result').innerText = data.Result || JSON.stringify(data, null, 2);
+            } catch (err) {
+                document.getElementById('result').innerText = 'Ошибка: ' + (err.message || 'Неизвестная ошибка');
+                console.error(err);
+            }
+        };
+
+        // Логи
+        document.getElementById('viewLogsBtn').onclick = async () => {
+            try {
+                const logs = await apiRequest(apiBase + '/logs');
+                document.getElementById('logs').innerText = JSON.stringify(logs, null, 2);
+            } catch (err) {
+                document.getElementById('logs').innerText = 'Ошибка загрузки логов';
+                console.error(err);
+            }
+        };
+
+        // стартуем
+        updateAuthUI();
+    </script>
+</body>
+</html>
