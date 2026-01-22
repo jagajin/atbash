@@ -5,6 +5,7 @@
 
     namespace Atbash.Api.Controllers
     {
+        [Authorize] 
         [ApiController]
         [Route("api/[controller]")]
         public class LogsController : ControllerBase

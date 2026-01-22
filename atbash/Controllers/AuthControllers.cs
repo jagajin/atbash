@@ -32,16 +32,17 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
-            return BadRequest("Требуются имя пользователя и пароль.");
+            return BadRequest(new { message = "Требуются имя пользователя и пароль" });
 
         var token = await _authService.AuthenticateAsync(dto.Username, dto.Password);
         if (token == null)
-            return Unauthorized(new { message = "Нерпавильное имя пользователя или пароль" });
+            return Unauthorized(new { message = "Неправильное имя пользователя или пароль" });
 
+        
         return Ok(new { token });
     }
-    
-    
+
+
 }
 //классы для передачи данных
 public class RegisterDto
